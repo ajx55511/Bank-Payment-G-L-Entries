@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D3.js Multilevel Drilldown Matrix</title>
+    <!-- D3.js library for data visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles to enhance appearance and ensure responsiveness */
+        body {
+            font-family: "Inter", sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+            max-width: 95%; /* Make it slightly less than 100% to ensure padding */
+            overflow-x: auto; /* Enable horizontal scrolling if table content overflows */
+            width: 100%; /* Ensure it takes full available width within max-width */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            table-layout: auto; /* Allows columns to size according to content */
+        }
+        th, td {
+            padding: 12px 16px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+            white-space: nowrap; /* Prevent text wrapping in cells */
+        }
+        th {
+            background-color: #e6f7ff; /* Light blue header background */
+            font-weight: bold;
+            color: #333;
+        }
+        .level-0 {
+            font-weight: bold;
+            background-color: #f0f8ff; /* Lighter blue for year rows */
+            cursor: pointer;
+        }
+        .level-1 {
+            font-weight: bold;
+            background-color: #f7fcff; /* Even lighter blue for quarter rows */
+            cursor: pointer;
+        }
+        /* Indentation for drilldown levels */
+        .level-0 > td:first-child { padding-left: 16px; }
+        .level-1 > td:first-child { padding-left: 40px; /* 16px + 24px */ }
+        .level-2 > td:first-child { padding-left: 64px; /* 16px + 24px + 24px */ }
+
+        .total-row {
+            font-weight: bold;
+            background-color: #dbeafe; /* Tailwind blue-200 for total row */
+            color: #1e40af; /* Darker blue for total text */
+        }
+        .expand-collapse-icon {
+            display: inline-block;
+            width: 16px; /* Ensure sufficient width for icon */
+            text-align: center;
+            margin-right: 8px; /* Spacing between icon and text */
+            font-weight: bold;
+            user-select: none; /* Prevent text selection on icon */
+        }
+        .text-right {
+            text-align: right;
+        }
+        /* Tailwind classes for table styling, added for consistency */
+        .min-w-full { min-width: 100%; }
+        .bg-white { background-color: #fff; }
+        .rounded-lg { border-radius: 0.5rem; }
+        .shadow-md { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+        .overflow-hidden { overflow: hidden; }
+        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .bg-blue-100 { background-color: #dbeafe; }
+        .text-left { text-align: left; }
+        .text-sm { font-size: 0.875rem; }
+        .font-semibold { font-weight: 600; }
+        .text-gray-700 { color: #4b5563; }
+        .uppercase { text-transform: uppercase; }
+        .tracking-wider { letter-spacing: 0.05em; }
+        .cursor-pointer { cursor: pointer; }
+        .hover\:bg-blue-50:hover { background-color: #eff6ff; }
+        .font-bold { font-weight: 700; }
+        .bg-blue-200 { background-color: #bfdbfe; }
+    </style>
+</head>
+<body>
+    <div id="matrix-container" class="container">
+        <h1 class="text-xl md:text-2xl font-bold mb-4 text-center">Bank Payments To Vendor Other A/C Pass Through General Ledger Adjustments</h1>
+    </div>
+
+    <script>
+        // Raw data extracted from the provided image.
+        // Each entry represents a month's data, with a parentId linking to its quarter.
+        const rawData = [
+            { id: '2024-Jan', name: 'January', level: 2, type: 'month', parentId: '2024-Q1', debit: 771233, credit: 0, net: 771233 },
+            { id: '2024-Feb', name: 'February', level: 2, type: 'month', parentId: '2024-Q1', debit: 869257, credit: 0, net: 869257 },
+            { id: '2024-Mar', name: 'March', level: 2, type: 'month', parentId: '2024-Q1', debit: 1942016, credit: 0, net: 1942016 },
+
+            { id: '2024-Apr', name: 'April', level: 2, type: 'month', parentId: '2024-Q2', debit: 4260637, credit: 0, net: 4260637 },
+            { id: '2024-May', name: 'May', level: 2, type: 'month', parentId: '2024-Q2', debit: 14620, credit: 0, net: 14620 },
+
+            { id: '2024-Jul', name: 'July', level: 2, type: 'month', parentId: '2024-Q3', debit: 8295, credit: 0, net: 8295 },
+            { id: '2024-Aug', name: 'August', level: 2, type: 'month', parentId: '2024-Q3', debit: 630, credit: 0, net: 630 },
+            { id: '2024-Sep', name: 'September', level: 2, type: 'month', parentId: '2024-Q3', debit: 61510, credit: 0, net: 61510 },
+
+            { id: '2024-Oct', name: 'October', level: 2, type: 'month', parentId: '2024-Q4', debit: 2648, credit: 0, net: 2648 },
+            { id: '2024-Nov', name: 'November', level: 2, type: 'month', parentId: '2024-Q4', debit: 118504, credit: 0, net: 118504 },
+            { id: '2024-Dec', name: 'December', level: 2, type: 'month', parentId: '2024-Q4', debit: 4911, credit: 0, net: 4911 },
+
+            { id: '2025-Jan', name: 'January', level: 2, type: 'month', parentId: '2025-Q1', debit: 2346756, credit: 0, net: 2346756 },
+            { id: '2025-Feb', name: 'February', level: 2, type: 'month', parentId: '2025-Q1', debit: 1015331, credit: 0, net: 1015331 },
+            { id: '2025-Mar', name: 'March', level: 2, type: 'month', parentId: '2025-Q1', debit: 706490, credit: 0, net: 706490 },
+
+            { id: '2025-Apr', name: 'April', level: 2, type: 'month', parentId: '2025-Q2', debit: 274635, credit: 0, net: 274635 },
+            { id: '2025-May', name: 'May', level: 2, type: 'month', parentId: '2025-Q2', debit: 37969, credit: 0, net: 37969 }
+        ];
+
+        // This array will hold all data nodes (years, quarters, months) with their aggregated values and expanded states.
+        let processedData = [];
+
+        /**
+         * Initializes and processes the raw data into a flat hierarchical structure.
+         * It calculates aggregated values for quarters and years and sets initial expanded states.
+         */
+        function initializeData() {
+            processedData = []; // Clear previous data if re-initializing
+
+            // 1. Add month nodes (level 2) to processedData. Months don't have an expanded state.
+            rawData.forEach(month => {
+                processedData.push({ ...month });
+            });
+
+            // 2. Create quarter nodes (level 1) and calculate their totals.
+            // d3.group is used to group months by their parentId (quarter ID).
+            const quarterGroups = d3.group(rawData, d => d.parentId);
+            quarterGroups.forEach((monthsInQuarter, quarterId) => {
+                const debit = d3.sum(monthsInQuarter, d => d.debit);
+                const credit = d3.sum(monthsInQuarter, d => d.credit);
+                const net = d3.sum(monthsInQuarter, d => d.net);
+                const yearId = quarterId.substring(0, 4); // Extract year from quarter ID (e.g., '2024-Q1' -> '2024')
+
+                processedData.push({
+                    id: quarterId,
+                    // Determine quarter name based on ID suffix
+                    name: (quarterId.includes('Q1') ? 'Qtr 1' : quarterId.includes('Q2') ? 'Qtr 2' : quarterId.includes('Q3') ? 'Qtr 3' : 'Qtr 4'),
+                    level: 1,
+                    type: 'quarter',
+                    parentId: yearId,
+                    debit: debit,
+                    credit: credit,
+                    net: net,
+                    expanded: true // Quarters are initially expanded
+                });
+            });
+
+            // 3. Create year nodes (level 0) and calculate their totals.
+            // d3.group is used to group quarters by their parentId (year ID).
+            const yearGroups = d3.group(processedData.filter(d => d.type === 'quarter'), d => d.parentId);
+            yearGroups.forEach((quartersInYear, yearId) => {
+                const debit = d3.sum(quartersInYear, d => d.debit);
+                const credit = d3.sum(quartersInYear, d => d.credit);
+                const net = d3.sum(quartersInYear, d => d.net);
+
+                processedData.push({
+                    id: yearId,
+                    name: yearId,
+                    level: 0,
+                    type: 'year',
+                    parentId: null, // Years have no parent
+                    debit: debit,
+                    credit: credit,
+                    net: net,
+                    expanded: true // Years are initially expanded
+                });
+            });
+
+            // 4. Sort all nodes to ensure correct hierarchical display order.
+            // This custom sort function ensures that parent nodes appear before their children
+            // and maintains a logical order within each level.
+            processedData.sort((a, b) => {
+                // Helper function to create a sortable path for each node
+                const getSortPath = (node) => {
+                    let pathSegments = [];
+                    let current = node;
+                    while (current) {
+                        // Prepend to path segments to build path from root down
+                        if (current.type === 'year') {
+                            pathSegments.unshift(current.id); // e.g., '2024'
+                        } else if (current.type === 'quarter') {
+                            pathSegments.unshift(current.id.slice(-2)); // e.g., 'Q1'
+                        } else if (current.type === 'month') {
+                            // Use month index for correct chronological sorting within a quarter
+                            const monthOrder = {
+                                'January': 1, 'February': 2, 'March': 3, 'April': 4, 'May': 5, 'June': 6,
+                                'July': 7, 'August': 8, 'September': 9, 'October': 10, 'November': 11, 'December': 12
+                            };
+                            pathSegments.unshift(String(monthOrder[current.name]).padStart(2, '0')); // e.g., '01' for January
+                        }
+                        current = processedData.find(n => n.id === current.parentId); // Move up to next ancestor
+                    }
+                    return pathSegments.join('-'); // Combine into a string for comparison
+                };
+
+                const pathA = getSortPath(a);
+                const pathB = getSortPath(b);
+                return pathA.localeCompare(pathB); // Compare paths lexicographically
+            });
+        }
+
+        /**
+         * Filters the processed data to return only the nodes that should be visible
+         * based on their own level and their ancestors' expanded states.
+         * @param {Array<Object>} data The full processed data array.
+         * @returns {Array<Object>} An array of visible nodes.
+         */
+        function getVisibleData(data) {
+            const visibleNodes = [];
+            // Create a quick lookup map for expanded states
+            const expandedStateMap = new Map(data.map(d => [d.id, d.expanded]));
+
+            data.forEach(node => {
+                let isVisible = true;
+                let current = node;
+
+                // Check if all ancestors of the current node are expanded
+                while (current.parentId) {
+                    const parent = data.find(d => d.id === current.parentId);
+                    // If parent doesn't exist or is not expanded, then this node is not visible
+                    if (!parent || !expandedStateMap.get(parent.id)) {
+                        isVisible = false;
+                        break;
+                    }
+                    current = parent; // Move up to the next ancestor
+                }
+
+                if (isVisible) {
+                    visibleNodes.push(node);
+                }
+            });
+            return visibleNodes;
+        }
+
+        /**
+         * Renders (or re-renders) the D3.js matrix table in the DOM.
+         * This function clears the existing table and draws a new one based on the current
+         * processedData and its expanded states.
+         */
+        function renderMatrix() {
+            // Remove any existing table to prepare for re-rendering
+            d3.select("#matrix-container").select("table").remove();
+
+            // Append a new table element with Tailwind classes for styling
+            const table = d3.select("#matrix-container").append("table")
+                .attr("class", "min-w-full bg-white rounded-lg shadow-md overflow-hidden");
+
+            // Append the table header (thead)
+            table.append("thead").append("tr")
+                .html(`
+                    <th class="py-3 px-4 bg-blue-100 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">Vendor</th>
+                    <th class="py-3 px-4 bg-blue-100 text-right text-sm font-semibold text-gray-700 uppercase tracking-wider">01 Bank Debit</th>
+                    <th class="py-3 px-4 bg-blue-100 text-right text-sm font-semibold text-gray-700 uppercase tracking-wider">02 Bank Credit</th>
+                    <th class="py-3 px-4 bg-blue-100 text-right text-sm font-semibold text-gray-700 uppercase tracking-wider">03 Bank Net</th>
+                `);
+
+            // Append the table body (tbody)
+            const tbody = table.append("tbody");
+
+            // Get only the currently visible data nodes
+            const visibleData = getVisibleData(processedData);
+
+            // Bind data to table rows (tr) using D3's data-join pattern
+            const rows = tbody.selectAll("tr.data-row")
+                .data(visibleData, d => d.id) // Key function (d.id) ensures correct updates and transitions
+                .join(
+                    // Enter selection: create new rows for new data points
+                    enter => {
+                        const tr = enter.append("tr")
+                            // Apply classes based on level for styling and clickability
+                            .attr("class", d => `data-row level-${d.level} ${d.type === 'year' || d.type === 'quarter' ? 'cursor-pointer hover:bg-blue-50' : ''}`);
+
+                        // First cell (Vendor/Name column) with expand/collapse icon and indentation
+                        tr.append("td")
+                            .attr("class", "px-4 py-2")
+                            .html(d => {
+                                // Add expand/collapse icon for year and quarter rows
+                                if (d.type === 'year' || d.type === 'quarter') {
+                                    const icon = d.expanded ? '−' : '+'; // Minus for expanded, plus for collapsed
+                                    return `<span class="expand-collapse-icon">${icon}</span>${d.name}`;
+                                }
+                                return d.name; // Just the name for month rows
+                            });
+
+                        // Value columns (Debit, Credit, Net)
+                        tr.append("td").attr("class", "px-4 py-2 text-right").text(d => d.debit !== undefined ? d3.format(",")(d.debit) : '');
+                        tr.append("td").attr("class", "px-4 py-2 text-right").text(d => d.credit !== undefined ? d3.format(",")(d.credit) : '');
+                        tr.append("td").attr("class", "px-4 py-2 text-right").text(d => d.net !== undefined ? d3.format(",")(d.net) : '');
+
+                        return tr;
+                    },
+                    // Update selection: update existing rows
+                    update => {
+                        // Update the expand/collapse icon for existing rows
+                        update.select(".expand-collapse-icon")
+                            .text(d => d.expanded ? '−' : '+');
+                        // Update the numerical values (in case they changed, though not dynamic in this setup)
+                        update.select("td:nth-child(2)").text(d => d.debit !== undefined ? d3.format(",")(d.debit) : '');
+                        update.select("td:nth-child(3)").text(d => d.credit !== undefined ? d3.format(",")(d.credit) : '');
+                        update.select("td:nth-child(4)").text(d => d.net !== undefined ? d3.format(",")(d.net) : '');
+                        return update;
+                    },
+                    // Exit selection: remove rows that are no longer in the data
+                    exit => exit.remove()
+                );
+
+            // Attach click event listeners for drilldown functionality
+            // Only year (level-0) and quarter (level-1) rows are clickable
+            tbody.selectAll("tr.level-0, tr.level-1")
+                .on("click", function(event, d) {
+                    // Find the actual node in the processedData and toggle its expanded state
+                    const nodeToToggle = processedData.find(node => node.id === d.id);
+                    if (nodeToToggle) {
+                        nodeToToggle.expanded = !nodeToToggle.expanded; // Toggle expanded status
+                        renderMatrix(); // Re-render the table to reflect the change
+                    }
+                });
+
+            // Calculate and append the Grand Total Row
+            // Sum only the 'month' type nodes to get the true grand total without double-counting
+            const grandTotalDebit = d3.sum(rawData, d => d.debit);
+            const grandTotalCredit = d3.sum(rawData, d => d.credit);
+            const grandTotalNet = d3.sum(rawData, d => d.net);
+
+            tbody.append("tr")
+                .attr("class", "total-row") // Apply total row styling
+                .html(`
+                    <td class="px-4 py-2 font-bold">Total</td>
+                    <td class="px-4 py-2 text-right font-bold">${d3.format(",")(grandTotalDebit)}</td>
+                    <td class="px-4 py-2 text-right font-bold">${d3.format(",")(grandTotalCredit)}</td>
+                    <td class="px-4 py-2 text-right font-bold">${d3.format(",")(grandTotalNet)}</td>
+                `);
+        }
+
+        // Initialize the data structure once when the script loads
+        initializeData();
+        // Perform the initial rendering of the matrix
+        renderMatrix();
+
+    </script>
+</body>
+</html>
